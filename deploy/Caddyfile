@@ -1,4 +1,7 @@
 {$SITE_ADDRESS::80} {
+	log {
+		output discard
+	}
 	encode gzip
 	request_body {
 		max_size 21MB
