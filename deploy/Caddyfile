@@ -1,0 +1,15 @@
+{$SITE_ADDRESS::80} {
+	encode gzip
+	request_body {
+		max_size 21MB
+	}
+	handle /v1/* {
+		reverse_proxy receiver:8000
+	}
+	handle /healthz {
+		reverse_proxy receiver:8000
+	}
+	handle {
+		respond "not found" 404
+	}
+}

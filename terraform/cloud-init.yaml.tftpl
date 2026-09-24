@@ -1,0 +1,28 @@
+#cloud-config
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - iptables-persistent
+
+write_files:
+  - path: /opt/infra/docker-compose.yml
+    encoding: b64
+    content: ${compose_b64}
+  - path: /opt/infra/Caddyfile
+    encoding: b64
+    content: ${caddy_b64}
+  - path: /opt/infra/.env
+    encoding: b64
+    permissions: "0600"
+    content: ${env_b64}
+
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - usermod -aG docker ubuntu
+  - iptables -I INPUT 6 -p tcp --dport 80 -j ACCEPT
+  - iptables -I INPUT 6 -p tcp --dport 443 -j ACCEPT
+  - netfilter-persistent save
+  - mkdir -p /opt/infra/data
+  - chown 10001:10001 /opt/infra/data
+  - cd /opt/infra && docker compose up -d

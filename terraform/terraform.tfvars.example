@@ -1,0 +1,11 @@
+region             = "ap-chuncheon-1"
+oci_config_profile = "DEFAULT"
+compartment_ocid   = "ocid1.tenancy.oc1..xxxx"
+ssh_public_key     = "ssh-ed25519 AAAA... you@pc"
+ssh_allowed_cidr   = "1.2.3.4/32"
+
+# 도메인이 있으면 "briefing.example.com" (자동 HTTPS), 없으면 ":80"
+site_address = ":80"
+
+receiver_image     = "ghcr.io/<github-user>/receiver:latest"
+receiver_api_token = "change-me-long-random"
