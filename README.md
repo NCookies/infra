@@ -204,6 +204,8 @@ python -m venv .venv && .venv/Scripts/python -m pip install -r requirements-dev.
 
 2026-09-25 (계약 변경 전) 실서버 확인: 토큰 없음 → 401, 라벨 업로드(허용 밖 `nickname` 포함) → `{"saved":1}` 이며 허용 밖 필드는 버려짐, `installId` 삭제 → `{"deleted":true}`, `/docs` → 404.
 
+2026-09-25 계약 확장 배포 후 실서버 확인(읽기 전용, 데이터를 쓰는 요청은 하지 않음): 토큰 없는 `POST /v1/diagnostics`·`/v1/labels`·`DELETE /v1/installs/…` → 401, `/docs` → 404, `/healthz` → 200. 배포 방법: main push → Actions 가 이미지 갱신, 설정 파일은 서버의 `/opt/infra` 에 직접 반영(`scp` 로 `docker-compose.yml`·`Caddyfile` 올리고 `caddy validate` 로 문법 확인 → 옛 파일은 `*.bak` 으로 백업 → `.env` 에 새 변수 추가 → `docker compose pull receiver && docker compose up -d`). `.env` 는 root 소유 0600 이라 서버에서 읽거나 고칠 때 `sudo` 가 필요하다.
+
 ## 문제 해결
 
 | 증상 | 원인 / 해결 |
