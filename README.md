@@ -184,6 +184,7 @@ scp -i $HOME\.ssh\oci_infra -r ubuntu@<public_ip>:/opt/infra/data .\backup
 | POST | `/v1/labels` | 라벨 묶음 → `data/labels/<installId>/<clipKey>.json` (같은 `clipKey` 를 다시 보내면 덮어씀) → `{saved}` |
 | POST | `/v1/logs` | 오류 로그·환경 → `data/logs/<installId>/<날짜>.jsonl` → `{saved}` |
 | POST | `/v1/diagnostics` | 진단 번들(사용자가 버튼으로 보냄) → `data/diagnostics/<installId>/<접수번호>.json` → `{receiptId:"R-20260925-K7M3QX", saved}` |
+| GET | `/v1/admin/labels` | **관리자 전용** 라벨 내보내기(`X-Admin-Token`, 업로드 토큰으로는 안 됨). `mode`(dev/release)·`after`(이전 응답의 `next`)·`limit`(최대 2000). `ADMIN_TOKEN` 이 비어 있으면 404. 앱 저장소 `tools/pull_labels.py` 가 쓴다. 로그·진단은 내보내지 않는다 |
 | DELETE | `/v1/installs/{installId}` | 그 설치가 보낸 라벨·로그·진단(개발 모드 포함) 전부 삭제 |
 
 **보관과 삭제**: 로그·진단 파일은 수신 후 `RETENTION_DAYS`(기본 90)일이 지나면 서버가 하루 한 번(그리고 시작할 때) 자동 삭제한다. 라벨은 삭제 요청 전까지 보관한다. 앱 저장소(`P:\lumia_briefing_room`)의 `docs/privacy.md` 에 적은 보관 기간과 이 값이 같아야 한다.

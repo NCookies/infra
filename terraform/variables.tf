@@ -100,3 +100,10 @@ variable "discord_webhook_url" {
   default     = ""
   sensitive   = true
 }
+
+variable "admin_token" {
+  description = "라벨 내보내기(GET /v1/admin/labels) 전용 관리자 토큰(비밀 값, tfvars 에만). 비우면 그 API 가 꺼진다(404)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}

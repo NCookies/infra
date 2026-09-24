@@ -24,6 +24,7 @@ locals {
       WATCHTOWER_POLL_INTERVAL=${var.watchtower_poll_interval}
       RETENTION_DAYS=${var.retention_days}
       DISCORD_WEBHOOK_URL=${var.discord_webhook_url}
+      ADMIN_TOKEN=${var.admin_token}
     ENV
     )
   })
