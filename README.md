@@ -188,7 +188,7 @@ scp -i $HOME\.ssh\oci_infra -r ubuntu@<public_ip>:/opt/infra/data .\backup
 
 **보관과 삭제**: 로그·진단 파일은 수신 후 `RETENTION_DAYS`(기본 90)일이 지나면 서버가 하루 한 번(그리고 시작할 때) 자동 삭제한다. 라벨은 삭제 요청 전까지 보관한다. 앱 저장소(`P:\lumia_briefing_room`)의 `docs/privacy.md` 에 적은 보관 기간과 이 값이 같아야 한다.
 
-**IP 를 남기지 않는 설정**: caddy 는 `log { output discard }` 로 접근 로그를 버리고, receiver 는 uvicorn `--no-access-log` 로 실행한다. 컨테이너 로그는 크기 회전(5MB×2)만 하며, 오류 로그에 IP 가 찍히는지는 배포 후 `docker compose logs` 로 확인한다.
+**IP 를 남기지 않는 설정**: caddy 는 **전역** `log { exclude http.log.access }` 로 접근 로그를 어디에도 남기지 않고(사이트 블록의 `log { output discard }` 만으로는 서버 IP 로 직접 접속한 요청이 로그에 남는다 — 2026-09-25 발견·수정), receiver 는 uvicorn `--no-access-log` 로 실행한다. 확인 방법: 서버 IP 로 `curl http://<공인 IP>/` 를 보낸 뒤 `docker compose logs caddy | grep -c http.log.access` 가 0 인지 본다. 컨테이너 로그는 크기 회전(5MB×2)만 하며, 오류 로그에 IP 가 찍히는지는 배포 후 `docker compose logs` 로 확인한다.
 
 **요청 제한·차단·알림**: `/v1/*` 요청을 클라이언트 IP(caddy 가 붙인 `X-Forwarded-For` 의 마지막 값) 별로 세어, 10분 창에서 요청이 `RATE_LIMIT_REQUESTS`(기본 60)회를 넘거나 거부되는 요청(401·404·405·413·422)이 `RATE_LIMIT_FAILURES`(기본 15)회 쌓이면 그 IP 를 `BLOCK_SEC`(기본 3600)초 동안 차단한다(429 + `Retry-After`). `/healthz` 는 제외. 정상 앱은 하루 1회 소량만 보내므로 임계값은 넉넉하다. **IP 는 receiver 프로세스 메모리에만 있고 디스크에 쓰지 않으며 재시작하면 사라진다.** 차단이 생기면 `DISCORD_WEBHOOK_URL` 로 알린다(IP 는 앞 두 자리만, 시간당 최대 10건). 웹훅 URL 은 비밀 값이라 서버 `.env` 와 로컬 `terraform.tfvars`(`discord_webhook_url`)에만 두고 저장소에 넣지 않는다. 비워 두면 알림 없이 차단만 한다. 한계: IP 기준이라 VPN 으로 우회할 수 있고, 같은 공유기 뒤 사용자는 한 IP 로 보인다.
 

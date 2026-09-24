@@ -1,3 +1,9 @@
+{
+	log {
+		exclude http.log.access
+	}
+}
+
 {$SITE_ADDRESS::80} {
 	log {
 		output discard
