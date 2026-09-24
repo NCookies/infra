@@ -137,13 +137,13 @@ sudo tail -30 /var/log/cloud-init-output.log     # 부팅 스크립트 로그 (.
 ```
 
 - `/opt/infra/docker-compose.yml`, `Caddyfile`, `.env` 는 cloud-init 이 만든 것이다. `.env` 는 `0600`.
-- 수신 데이터는 `/opt/infra/data/{labels,logs}/<installId>/` (컨테이너 사용자 uid 10001 소유).
+- 수신 데이터는 `/opt/infra/data/{labels,logs,diagnostics}/<installId>/` (컨테이너 사용자 uid 10001 소유). 개발 모드(`mode=dev`) 데이터는 `/opt/infra/data/dev/` 아래에 따로 쌓인다. 일별 집계는 `/opt/infra/data/stats/<날짜>.json`.
 
 ### 자동 업데이트
 
 `services/receiver/**` 를 main 에 push → Actions 가 테스트 후 이미지를 갱신 → 서버의 watchtower 가 주기적으로 감지해 receiver 컨테이너만 교체한다. 새 서비스는 compose 에 서비스를 추가하고 `com.centurylinklabs.watchtower.enable: "true"` 라벨을 붙이면 같은 방식으로 갱신된다.
 
-> **TODO: 갱신 확인 간격을 나중에 늘린다.** 지금은 `deploy/docker-compose.yml` 의 watchtower `--interval 300`(5분)으로 두었다. 이 서비스는 급하게 배포할 이유가 없으니 **1~2시간(예: 7200초)** 이 적당하다. 개발 중 테스트할 때만 2~3분으로 줄이는 식으로, 간격을 환경변수(`WATCHTOWER_POLL_INTERVAL`)로 빼서 서버의 `.env` 만 고치면 바뀌게 만들 계획이다. (반영하려면 이 파일과 `terraform/compute.tf` 의 `.env` 생성부, 서버의 `/opt/infra` 를 함께 고친다.)
+갱신 확인 간격은 `.env` 의 `WATCHTOWER_POLL_INTERVAL`(초, 기본 7200 = 2시간)이다. 개발 중 빠르게 확인하고 싶을 때만 `120` 정도로 줄이고 `docker compose up -d` 한다(`terraform.tfvars` 의 `watchtower_poll_interval` 은 VM 을 새로 만들 때 `.env` 에 들어간다).
 
 ### 설정을 바꿀 때 (VM 은 다시 만들지 않는다)
 
@@ -156,7 +156,7 @@ sudo nano docker-compose.yml  # 서비스 추가 등
 docker compose up -d
 ```
 
-- **API 토큰 교체**: `tfvars` 와 서버 `/opt/infra/.env` 의 `RECEIVER_API_TOKEN` 을 둘 다 바꾸고 `docker compose up -d`. 앱 쪽 값도 같이.
+- **API 토큰 교체(무중단)**: 서버는 `RECEIVER_API_TOKEN` 과 쉼표로 구분한 `RECEIVER_API_TOKENS` 를 **모두** 허용한다. ① `.env` 의 `RECEIVER_API_TOKENS` 에 새 토큰을 추가하고 `docker compose up -d` ② 새 토큰을 넣은 앱 버전을 배포 ③ 대부분 업데이트한 뒤 옛 토큰을 `.env` 에서 지우고 `docker compose up -d`(그 토큰을 쓰던 앱은 401 을 받고 전송만 실패한다). 유출로 즉시 막아야 하면 ③ 을 먼저 한다.
 - **SSH 허용 IP 변경**(공인 IP 가 바뀌어 접속이 막혔을 때): `tfvars` 의 `ssh_allowed_cidr` 를 고치고 `terraform apply` — 보안 목록만 바뀐다(VM 유지). IP 를 모르면 콘솔의 VCN → 보안 목록에서 직접 수정해도 된다.
 - **도메인 변경**: 서버 `.env` 의 `SITE_ADDRESS` 수정 후 `docker compose up -d`, DNS A 레코드도 변경.
 
@@ -174,16 +174,25 @@ scp -i $HOME\.ssh\oci_infra -r ubuntu@<public_ip>:/opt/infra/data .\backup
 
 ## 수신 API (receiver)
 
-모든 `/v1/*` 는 `X-Api-Token` 헤더 필요(`receiver_api_token`). 허용 목록에 없는 필드는 버린다. `installId` 는 UUID 여야 한다. `/docs` 등 API 문서는 꺼져 있다(404).
+모든 `/v1/*` 는 `X-Api-Token` 헤더 필요(`receiver_api_token`, 여러 개 가능 — 위 "API 토큰 교체"). 허용 목록에 없는 필드는 버린다(버려진 필드 **이름**만 일별 집계에 센다). `installId` 는 UUID, 모든 페이로드에 `schemaVersion`·`mode`(`dev`/`release`)가 필요하다. `/docs` 등 API 문서는 꺼져 있다(404).
+
+**요청·응답 명세의 원본은 [`contract/receiver.schema.json`](contract/receiver.schema.json)** 이고, `contract/fixtures/` 의 수락·거부·버림 예시를 서버 테스트(`tests/test_contract.py`)와 앱 저장소가 같이 쓴다. 필드를 바꿀 때는 스키마·`app/schemas.py`·픽스처를 함께 고친다(어긋나면 테스트가 깨진다). 앱 저장소의 복사본은 `tools/sync_contract.py` 로 갱신한다.
 
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | GET | `/healthz` | 상태 확인(토큰 불필요) |
-| POST | `/v1/labels` | `{installId, appVersion, labels:[...]}` → `data/labels/<installId>/<id>.json` |
-| POST | `/v1/logs` | `{installId, env, entries:[{ts,level,message}]}` → `data/logs/<installId>/<날짜>.jsonl` |
-| DELETE | `/v1/installs/{installId}` | 그 설치가 보낸 데이터 전부 삭제 |
+| POST | `/v1/labels` | 라벨 묶음 → `data/labels/<installId>/<clipKey>.json` (같은 `clipKey` 를 다시 보내면 덮어씀) → `{saved}` |
+| POST | `/v1/logs` | 오류 로그·환경 → `data/logs/<installId>/<날짜>.jsonl` → `{saved}` |
+| POST | `/v1/diagnostics` | 진단 번들(사용자가 버튼으로 보냄) → `data/diagnostics/<installId>/<접수번호>.json` → `{receiptId:"R-20260925-K7M3QX", saved}` |
+| DELETE | `/v1/installs/{installId}` | 그 설치가 보낸 라벨·로그·진단(개발 모드 포함) 전부 삭제 |
 
-요청 본문 상한 20MB(`MAX_BODY_BYTES`, Caddy 는 21MB). 라벨 필드 허용 목록은 `services/receiver/app/schemas.py` 이며 SPEC 의 메타데이터 예시를 보고 정한 것이라 **앱의 실제 전송 필드와 맞춰야 한다**(앱 쪽 전송 클라이언트를 만들 때).
+**보관과 삭제**: 로그·진단 파일은 수신 후 `RETENTION_DAYS`(기본 90)일이 지나면 서버가 하루 한 번(그리고 시작할 때) 자동 삭제한다. 라벨은 삭제 요청 전까지 보관한다. 앱 저장소(`P:\lumia_briefing_room`)의 `docs/privacy.md` 에 적은 보관 기간과 이 값이 같아야 한다.
+
+**IP 를 남기지 않는 설정**: caddy 는 `log { output discard }` 로 접근 로그를 버리고, receiver 는 uvicorn `--no-access-log` 로 실행한다. 컨테이너 로그는 크기 회전(5MB×2)만 하며, 오류 로그에 IP 가 찍히는지는 배포 후 `docker compose logs` 로 확인한다.
+
+**일별 집계**(`data/stats/<날짜>.json`): 엔드포인트별 수신 건수·총/평균 바이트, 거부(422)된 요청 수와 거부 사유가 된 필드 이름, 허용 목록 밖이라 버린 필드 이름. 값(라벨 메모 포함)은 남기지 않는다. 앱과 서버 스키마가 어긋났는지, DB 가 필요한 규모인지 보는 자료다.
+
+요청 본문 상한 20MB(`MAX_BODY_BYTES`, Caddy 는 21MB). 라벨 필드는 2026-09-25 에 앱의 실제 메타데이터(`ClipMetadata`)와 하나씩 대조해 확정했다(전송·제외 분류는 `contract/app-metadata-fields.json`).
 
 로컬 개발/테스트:
 
@@ -193,7 +202,7 @@ python -m venv .venv && .venv/Scripts/python -m pip install -r requirements-dev.
 .venv/Scripts/python -m pytest
 ```
 
-2026-09-25 실서버 확인: 토큰 없음 → 401, 라벨 업로드(허용 밖 `nickname` 포함) → `{"saved":1}` 이며 허용 밖 필드는 버려짐, `installId` 삭제 → `{"deleted":true}`, `/docs` → 404.
+2026-09-25 (계약 변경 전) 실서버 확인: 토큰 없음 → 401, 라벨 업로드(허용 밖 `nickname` 포함) → `{"saved":1}` 이며 허용 밖 필드는 버려짐, `installId` 삭제 → `{"deleted":true}`, `/docs` → 404.
 
 ## 문제 해결
 
@@ -217,8 +226,7 @@ python -m venv .venv && .venv/Scripts/python -m pip install -r requirements-dev.
 ## 알려진 한계
 
 - 요청 빈도 제한이 없다(크기 상한과 공유 토큰만). 앱에 토큰이 들어가므로 완전한 인증이 아니다.
-- 청크 전송은 Content-Length 검사를 우회한다. Caddy 의 `request_body max_size` 가 상한을 강제한다.
+- 청크 전송은 Content-Length 검사를 우회하지만 본문을 읽은 뒤 크기를 다시 검사하고(413), Caddy 의 `request_body max_size` 도 상한을 강제한다.
 - 공인 IP 가 예약 IP 가 아니라서 VM 을 다시 만들면 바뀐다.
 - 저장은 파일뿐이다(2단계 DB 는 아직).
-- watchtower 간격이 5분(위 TODO).
 - 1GB 메모리 VM 이라 서비스를 늘리면 부족할 수 있다.
