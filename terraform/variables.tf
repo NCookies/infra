@@ -81,3 +81,15 @@ variable "receiver_api_token" {
   type        = string
   sensitive   = true
 }
+
+variable "watchtower_poll_interval" {
+  description = "watchtower 이미지 갱신 확인 간격(초). 개발 중 테스트할 때만 줄인다"
+  type        = number
+  default     = 7200
+}
+
+variable "retention_days" {
+  description = "오류 로그·진단 번들 자동 삭제까지의 일수(docs/privacy.md 의 보관 기간과 같아야 한다)"
+  type        = number
+  default     = 90
+}

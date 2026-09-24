@@ -21,6 +21,8 @@ locals {
       SITE_ADDRESS=${var.site_address}
       RECEIVER_IMAGE=${var.receiver_image}
       RECEIVER_API_TOKEN=${var.receiver_api_token}
+      WATCHTOWER_POLL_INTERVAL=${var.watchtower_poll_interval}
+      RETENTION_DAYS=${var.retention_days}
     ENV
     )
   })

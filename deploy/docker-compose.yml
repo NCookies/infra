@@ -7,6 +7,11 @@ services:
       - "443:443"
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    logging: &rotate
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -18,6 +23,9 @@ services:
     restart: unless-stopped
     environment:
       API_TOKEN: ${RECEIVER_API_TOKEN}
+      API_TOKENS: ${RECEIVER_API_TOKENS:-}
+      RETENTION_DAYS: ${RETENTION_DAYS:-90}
+    logging: *rotate
     volumes:
       - ./data:/data
     labels:
@@ -26,11 +34,13 @@ services:
   watchtower:
     image: containrrr/watchtower
     restart: unless-stopped
-    command: --label-enable --interval 300 --cleanup
+    command: --label-enable --cleanup
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       DOCKER_API_VERSION: "1.44"
+      WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-7200}
+    logging: *rotate
 
 volumes:
   caddy_data:
