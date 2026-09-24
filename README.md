@@ -190,6 +190,8 @@ scp -i $HOME\.ssh\oci_infra -r ubuntu@<public_ip>:/opt/infra/data .\backup
 
 **IP 를 남기지 않는 설정**: caddy 는 `log { output discard }` 로 접근 로그를 버리고, receiver 는 uvicorn `--no-access-log` 로 실행한다. 컨테이너 로그는 크기 회전(5MB×2)만 하며, 오류 로그에 IP 가 찍히는지는 배포 후 `docker compose logs` 로 확인한다.
 
+**요청 제한·차단·알림**: `/v1/*` 요청을 클라이언트 IP(caddy 가 붙인 `X-Forwarded-For` 의 마지막 값) 별로 세어, 10분 창에서 요청이 `RATE_LIMIT_REQUESTS`(기본 60)회를 넘거나 거부되는 요청(401·404·405·413·422)이 `RATE_LIMIT_FAILURES`(기본 15)회 쌓이면 그 IP 를 `BLOCK_SEC`(기본 3600)초 동안 차단한다(429 + `Retry-After`). `/healthz` 는 제외. 정상 앱은 하루 1회 소량만 보내므로 임계값은 넉넉하다. **IP 는 receiver 프로세스 메모리에만 있고 디스크에 쓰지 않으며 재시작하면 사라진다.** 차단이 생기면 `DISCORD_WEBHOOK_URL` 로 알린다(IP 는 앞 두 자리만, 시간당 최대 10건). 웹훅 URL 은 비밀 값이라 서버 `.env` 와 로컬 `terraform.tfvars`(`discord_webhook_url`)에만 두고 저장소에 넣지 않는다. 비워 두면 알림 없이 차단만 한다. 한계: IP 기준이라 VPN 으로 우회할 수 있고, 같은 공유기 뒤 사용자는 한 IP 로 보인다.
+
 **일별 집계**(`data/stats/<날짜>.json`): 엔드포인트별 수신 건수·총/평균 바이트, 거부(422)된 요청 수와 거부 사유가 된 필드 이름, 허용 목록 밖이라 버린 필드 이름. 값(라벨 메모 포함)은 남기지 않는다. 앱과 서버 스키마가 어긋났는지, DB 가 필요한 규모인지 보는 자료다.
 
 요청 본문 상한 20MB(`MAX_BODY_BYTES`, Caddy 는 21MB). 라벨 필드는 2026-09-25 에 앱의 실제 메타데이터(`ClipMetadata`)와 하나씩 대조해 확정했다(전송·제외 분류는 `contract/app-metadata-fields.json`).
@@ -227,7 +229,7 @@ python -m venv .venv && .venv/Scripts/python -m pip install -r requirements-dev.
 
 ## 알려진 한계
 
-- 요청 빈도 제한이 없다(크기 상한과 공유 토큰만). 앱에 토큰이 들어가므로 완전한 인증이 아니다.
+- 앱에 토큰이 들어가므로 완전한 인증이 아니다(공개 키 수준). 실질 방어는 필드 허용 목록·크기 상한·IP 별 요청 제한이다.
 - 청크 전송은 Content-Length 검사를 우회하지만 본문을 읽은 뒤 크기를 다시 검사하고(413), Caddy 의 `request_body max_size` 도 상한을 강제한다.
 - 공인 IP 가 예약 IP 가 아니라서 VM 을 다시 만들면 바뀐다.
 - 저장은 파일뿐이다(2단계 DB 는 아직).
