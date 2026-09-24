@@ -157,6 +157,7 @@ docker compose up -d
 ```
 
 - **API 토큰 교체(무중단)**: 서버는 `RECEIVER_API_TOKEN` 과 쉼표로 구분한 `RECEIVER_API_TOKENS` 를 **모두** 허용한다. ① `.env` 의 `RECEIVER_API_TOKENS` 에 새 토큰을 추가하고 `docker compose up -d` ② 새 토큰을 넣은 앱 버전을 배포 ③ 대부분 업데이트한 뒤 옛 토큰을 `.env` 에서 지우고 `docker compose up -d`(그 토큰을 쓰던 앱은 401 을 받고 전송만 실패한다). 유출로 즉시 막아야 하면 ③ 을 먼저 한다.
+- **관리자 토큰(라벨 내보내기)**: `.env` 의 `ADMIN_TOKEN`(값은 `terraform.tfvars` 의 `admin_token`, 로컬 `tools/pull_labels.py` 가 `LUMIA_ADMIN_TOKEN` 으로 쓴다). 비우면 `GET /v1/admin/labels` 가 꺼진다(404). 바꾸려면 `.env` 와 tfvars 를 같이 고치고 `docker compose up -d`. 업로드 토큰과 별개라 앱에는 들어가지 않는다.
 - **SSH 허용 IP 변경**(공인 IP 가 바뀌어 접속이 막혔을 때): `tfvars` 의 `ssh_allowed_cidr` 를 고치고 `terraform apply` — 보안 목록만 바뀐다(VM 유지). IP 를 모르면 콘솔의 VCN → 보안 목록에서 직접 수정해도 된다.
 - **도메인 변경**: 서버 `.env` 의 `SITE_ADDRESS` 수정 후 `docker compose up -d`, DNS A 레코드도 변경.
 
