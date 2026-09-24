@@ -93,3 +93,10 @@ variable "retention_days" {
   type        = number
   default     = 90
 }
+
+variable "discord_webhook_url" {
+  description = "차단·이상 요청 알림을 받을 Discord 웹훅 URL(비밀 값, tfvars 에만 둔다). 비우면 알림을 보내지 않는다"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
