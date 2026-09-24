@@ -4,6 +4,9 @@ compartment_ocid   = "ocid1.tenancy.oc1..xxxx"
 ssh_public_key     = "ssh-ed25519 AAAA... you@pc"
 ssh_allowed_cidr   = "1.2.3.4/32"
 
+# A1(ARM)은 계정·리전에 따라 LaunchInstance 404 가 났다. 무료 x86 micro 사용 (README "VM shape" 참고)
+instance_shape = "VM.Standard.E2.1.Micro"
+
 # 도메인이 있으면 "briefing.example.com" (자동 HTTPS), 없으면 ":80"
 site_address = ":80"
 
