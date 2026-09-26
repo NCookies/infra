@@ -72,7 +72,7 @@ variable "site_address" {
 }
 
 variable "receiver_image" {
-  description = "수신 서버 도커 이미지 (예: ghcr.io/<user>/receiver:latest)"
+  description = "수신 서버 도커 이미지 (예: ghcr.io/<user>/receiver:latest — 앱 저장소의 server/receiver 에서 빌드)"
   type        = string
 }
 
