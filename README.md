@@ -157,7 +157,7 @@ docker compose up -d
 ```
 
 - **API 토큰 교체(무중단)**: 서버는 `RECEIVER_API_TOKEN` 과 쉼표로 구분한 `RECEIVER_API_TOKENS` 를 **모두** 허용한다. ① `.env` 의 `RECEIVER_API_TOKENS` 에 새 토큰을 추가하고 `docker compose up -d` ② 새 토큰을 넣은 앱 버전을 배포 ③ 대부분 업데이트한 뒤 옛 토큰을 `.env` 에서 지우고 `docker compose up -d`(그 토큰을 쓰던 앱은 401 을 받고 전송만 실패한다). 유출로 즉시 막아야 하면 ③ 을 먼저 한다.
-- **관리자 토큰(라벨 내보내기)**: `.env` 의 `ADMIN_TOKEN`(값은 `terraform.tfvars` 의 `admin_token`, 로컬 `tools/pull_labels.py` 가 `LUMIA_ADMIN_TOKEN` 으로 쓴다). 비우면 `GET /v1/admin/labels` 가 꺼진다(404). 바꾸려면 `.env` 와 tfvars 를 같이 고치고 `docker compose up -d`. 업로드 토큰과 별개라 앱에는 들어가지 않는다.
+- **관리자 토큰(라벨 내보내기 · 상태 · 진단 · 오류 로그 조회)**: `.env` 의 `ADMIN_TOKEN`(값은 `terraform.tfvars` 의 `admin_token`, 로컬 `tools/pull_labels.py` 가 `LUMIA_ADMIN_TOKEN` 으로 쓴다). 비우면 `GET /v1/admin/labels` 가 꺼진다(404). 바꾸려면 `.env` 와 tfvars 를 같이 고치고 `docker compose up -d`. 업로드 토큰과 별개라 앱에는 들어가지 않는다.
 - **SSH 허용 IP 변경**(공인 IP 가 바뀌어 접속이 막혔을 때): `tfvars` 의 `ssh_allowed_cidr` 를 고치고 `terraform apply` — 보안 목록만 바뀐다(VM 유지). IP 를 모르면 콘솔의 VCN → 보안 목록에서 직접 수정해도 된다.
 - **도메인 변경**: 서버 `.env` 의 `SITE_ADDRESS` 수정 후 `docker compose up -d`, DNS A 레코드도 변경.
 
@@ -185,7 +185,12 @@ scp -i $HOME\.ssh\oci_infra -r ubuntu@<public_ip>:/opt/infra/data .\backup
 | POST | `/v1/labels` | 라벨 묶음 → `data/labels/<installId>/<clipKey>.json` (같은 `clipKey` 를 다시 보내면 덮어씀) → `{saved}` |
 | POST | `/v1/logs` | 오류 로그·환경 → `data/logs/<installId>/<날짜>.jsonl` → `{saved}` |
 | POST | `/v1/diagnostics` | 진단 번들(사용자가 버튼으로 보냄) → `data/diagnostics/<installId>/<접수번호>.json` → `{receiptId:"R-20260925-K7M3QX", saved}` |
-| GET | `/v1/admin/labels` | **관리자 전용** 라벨 내보내기(`X-Admin-Token`, 업로드 토큰으로는 안 됨). `mode`(dev/release)·`after`(이전 응답의 `next`)·`limit`(최대 2000). `ADMIN_TOKEN` 이 비어 있으면 404. 앱 저장소 `tools/pull_labels.py` 가 쓴다. 로그·진단은 내보내지 않는다 |
+| GET | `/v1/admin/labels` | **관리자 전용** 라벨 내보내기(`X-Admin-Token`, 업로드 토큰으로는 안 됨). `mode`(dev/release)·`after`(이전 응답의 `next`)·`limit`(최대 2000). `ADMIN_TOKEN` 이 비어 있으면 404. 앱 저장소 `tools/pull_labels.py` 가 쓴다. |
+| GET | `/v1/admin/status` | **관리자 전용** 서버 상태: 모드별(release/dev) 라벨·로그 파일·진단 수·설치 수·종류별 마지막 수신 시각, 오늘 요청·거부 건수(엔드포인트별), 디스크 사용률·데이터 용량, 지금 차단 중인 IP **개수**(주소는 안 줌), 보관 기간 |
+| GET | `/v1/admin/diagnostics` | **관리자 전용** 진단 번들 목록(최신순). `mode`·`q`(접수 번호·표시용 ID·installId 앞부분)·`limit`(최대 500)·`offset`. 항목은 요약(접수 번호·표시용 ID·installId·수신 시각·버전·OS·항목 수·오류 수) |
+| GET | `/v1/admin/diagnostics/{receiptId}` | **관리자 전용** 진단 번들 전문(환경 정보·로그 발췌). 접수 번호 형식이 아니면 404 |
+| GET | `/v1/admin/logs` | **관리자 전용** 오류 로그 항목을 펼쳐 최신순으로. `mode`·`installId`·`level`·`q`(메시지·예외 종류)·`limit`(최대 1000)·`offset` |
+| GET | `/v1/admin/logs/groups` | **관리자 전용** 같은 오류 묶음 집계(`fingerprint`, 없으면 예외 종류+메시지): 횟수·설치 수·처음/마지막 시각·대표 메시지, 많은 순 |
 | DELETE | `/v1/installs/{installId}` | 그 설치가 보낸 라벨·로그·진단(개발 모드 포함) 전부 삭제 |
 
 **보관과 삭제**: 로그·진단 파일은 수신 후 `RETENTION_DAYS`(기본 90)일이 지나면 서버가 하루 한 번(그리고 시작할 때) 자동 삭제한다. 라벨은 삭제 요청 전까지 보관한다. 앱 저장소(`P:\lumia_briefing_room`)의 `docs/privacy.md` 에 적은 보관 기간과 이 값이 같아야 한다.
